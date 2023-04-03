@@ -1,0 +1,58 @@
+name: Build and push Docker image
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+  DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: 'us-east-1'
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REGISTRY: '$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com'
+  AWS_ECR_PASSWORD: ${{ secrets.AWS_ECR_PASSWORD }}  
+  IMAGE_NAME: 'base-image-test'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Log in to DockerHub
+      run: docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_TOKEN docker.io
+      
+    - name: Build Docker image
+      run: docker build -t $DOCKER_HUB_USERNAME/$IMAGE_NAME .
+        
+    - name: Push to DockerHub
+      run: docker push $DOCKER_HUB_USERNAME/$IMAGE_NAME
+      
+    - name: Log off of DockerHub
+      run: docker logout
+
+    - name: Login to Amazon ECR
+      uses: jwalton/gh-ecr-login@v2.0.4
+      with:
+        access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        region: us-east-1
+    
+    - run: docker build --tag $IMAGE_NAME .
+
+    - name: Push to ECR
+      uses: jwalton/gh-ecr-push@v1.3.6
+      with:
+        access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        region: us-east-1
+        local-image: $IMAGE_NAME
+        image: $IMAGE_NAME
+    
+    - name: Log off of ECR
+      run: docker logout
